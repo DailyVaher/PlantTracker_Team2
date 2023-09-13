@@ -28,44 +28,85 @@
 <body>
 
 <div id="app">
+
+
     <!-- Page content-->
     <div class="container">
         <div class="text-center mt-5">
             <h1>Plant Tracker</h1>
             <p class="lead">This is a simple plant tracking app</p>
             <div class="row">
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" @click="showRegisterModal">
-                    Register
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" v-if="!sessionId"
+                        @click="showModal('signUpModal')">
+                    Sign Up
+                </button>
+                &nbsp;
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" v-if="!sessionId"
+                        @click="showModal('signInModal')">
+                    Sign In
+                </button>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" v-if="sessionId" @click="signOut">
+                    Sign Out
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Modal -->
-    <div class="modal fade" id="registerModal" tabindex="-1" aria-labelledby="registerModalLabel" aria-hidden="true">
+    <!-- Sign Up Modal -->
+    <div class="modal fade" id="signUpModal" tabindex="-1" aria-labelledby="signUpModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h1 class="modal-title fs-5" id="registerModalLabel">Register</h1>
+                    <h1 class="modal-title fs-5" id="signUpModalLabel">Sign Up</h1>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3 row">
-                        <label for="email" class="col-sm-2 col-form-label">Email</label>
+                        <label for="signUpEmail" class="col-sm-2 col-form-label">Email</label>
                         <div class="col-sm-10">
-                            <input type="text" class="form-control" id="email" v-model="registerEmail">
+                            <input type="text" class="form-control" id="signUpEmail" v-model="signUpEmail">
                         </div>
                     </div>
                     <div class="mb-3 row">
-                        <label for="inputPassword" class="col-sm-2 col-form-label">Password</label>
+                        <label for="signUpPassword" class="col-sm-2 col-form-label">Password</label>
                         <div class="col-sm-10">
-                            <input type="password" class="form-control" id="inputPassword" v-model="registerPassword">
+                            <input type="password" class="form-control" id="signUpPassword" v-model="signUpPassword">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" @click="register">Register</button>
+                    <button type="button" class="btn btn-primary" @click="signUp">Sign Up</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sign In Modal -->
+    <div class="modal fade" id="signInModal" tabindex="-1" aria-labelledby="signInModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="signInModalLabel">Sign In</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 row">
+                        <label for="signInEmail" class="col-sm-2 col-form-label">Email</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" id="signInEmail" v-model="signInEmail">
+                        </div>
+                    </div>
+                    <div class="mb-3 row">
+                        <label for="signInPassword" class="col-sm-2 col-form-label">Password</label>
+                        <div class="col-sm-10">
+                            <input type="password" class="form-control" id="signInPassword" v-model="signInPassword">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" @click="signIn">Sign in</button>
                 </div>
             </div>
         </div>
@@ -75,52 +116,120 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
 <script>
-    const {createApp} = Vue
 
-    createApp({
+    function tryToParseJSON(jsonString) {
+        try {
+            const o = JSON.parse(jsonString)
+            if (o && typeof o === "object") {
+                return o
+            }
+        } catch (e) {
+        }
+        return false
+    }
+
+    Vue.createApp({
         data() {
             return {
                 modalHandler: null,
-                registerEmail: null,
-                registerPassword: null
+                signUpEmail: null,
+                signUpPassword: null,
+                signInEmail: null,
+                signInPassword: null,
+                sessionId: null
             }
         },
+        mounted() {
+            // Check if the user is already signed in from local storage
+            this.sessionId = localStorage.getItem('sessionId')
+
+        },
         methods: {
-            showRegisterModal: function () {
-                this.modalHandler = new bootstrap.Modal(document.getElementById('registerModal'), {
+            showModal: function (modalId) {
+                this.modalHandler = new bootstrap.Modal(document.getElementById(modalId), {
                     keyboard: false
                 })
                 this.modalHandler.show()
             },
-            send: async function (method, url, body) {
-                await fetch(url, {
-                    method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(body)
-                }).then(async res => {
-                    return {body: await res.text(), status: res.status}
-                }).then(res => {
-                    if (res.status > 299) {
-                        alert('Error ' + res.status + ': ' + res.body)
-                        console.log(100)
-                        throw new Error('Error ' + res.status + ': ' + res.body)
-                    }
+            send: function (method, url, body) {
+                const vue = this;
 
+                async function CheckError(response) {
+                    if (response.status >= 200 && response.status <= 299) {
+                        let responseText = await response.text()
+                        return {ok: true, status: response.status, body: tryToParseJSON(responseText)}
+                    } else {
+                        let responseText = await response.text()
+                        let responseObject = tryToParseJSON(responseText)
+                        if (typeof responseObject === 'object' && typeof responseObject.error === 'string') {
+                            alert('Error code ' + response.status + ":\n" + responseObject.error)
+                        } else {
+                            alert('Error code ' + response.status + ":\n" + responseText)
+                        }
+                        if (response.status === 401) {
+                            vue.clearStorageAndResetSessionId();
+                        }
+                        return {ok: false, status: response.status, body: responseObject || responseText}
+                    }
+                }
+
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (this.sessionId) {
+                    headers.Authorization = "Bearer " + this.sessionId;
+                }
+                return fetch(url, {
+                    method: method,
+                    headers,
+                    body: JSON.stringify(body)
                 })
+                    .then(CheckError)
+                    .then((jsonResponse) => {
+                        return jsonResponse
+                    }).catch((error) => {
+                        throw Error('Network error: ' + error);
+                    });
             },
-            register: async function () {
+            signUp: async function () {
                 // Send POST /users
-                const email = this.registerEmail
-                const password = this.registerPassword
-                try {
-                    await this.send('POST', '/users', {email, password});
+                const email = this.signUpEmail
+                const password = this.signUpPassword
+                const response = await this.send('POST', '/users', {email, password});
+                if (response.ok) {
                     alert('User created successfully')
                     this.modalHandler.hide()
-                } catch (e) {
-                    console.log(e)
                 }
+            },
+            signIn: async function () {
+                // Send POST /sessions
+                const email = this.signInEmail
+                const password = this.signInPassword
+                const response = await this.send('POST', '/sessions', {email, password});
+                if (response.ok) {
+
+                    // Store the token in localStorage
+                    localStorage.setItem('sessionId', response.body.id)
+
+                    // Sign in the user
+                    this.sessionId = response.body.id
+
+                    // Close the modal
+                    this.modalHandler.hide()
+                }
+            },
+            signOut: async function () {
+                // Send DELETE /sessions
+
+                const response = await this.send('DELETE', '/sessions/');
+                if (response.ok) {
+                    this.clearStorageAndResetSessionId()
+                }
+
+            },
+            clearStorageAndResetSessionId: function () {
+                localStorage.removeItem('sessionId')
+                this.sessionId = null
             }
         }
     }).mount('#app')
